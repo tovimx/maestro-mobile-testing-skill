@@ -1,7 +1,7 @@
 ---
 name: maestro-mobile-testing
 description: "Maestro mobile E2E testing patterns for React Native/Expo apps: YAML test flows, testID selectors, adaptive auth state, optimistic update verification, GraalJS scripting, cross-platform stability, CI/CD integration, Maestro Cloud, and MCP server integration"
-version: 1.0.0
+version: 1.1.0
 category: toolchain
 author: tovimx
 license: MIT
@@ -79,20 +79,37 @@ maestro studio                                  # interactive builder
 
 ## Core Patterns
 
-### 1. Always Use testID Selectors
+### 1. Selector Strategy: testID vs Text
 
-Target elements with `testID` props, never text matchers for interactive elements.
+Choose your selector approach based on project context. Both are valid — the right choice depends on whether your app is localized and your team's testing philosophy.
+
+| Context | Recommended Selector | Rationale |
+|---------|---------------------|-----------|
+| **Multi-language / i18n** | `id:` (testID) | Stable across translations |
+| **Single language** | Text labels | Human-readable, self-documenting tests |
+| **Agent-maintained tests** | Either — ask the developer | Readability matters less for AI-maintained flows |
+| **System dialogs** | Text (always) | No testID possible on native alerts |
 
 ```yaml
-# CORRECT — stable selector
+# testID selector — stable across translations
 - tapOn:
     id: "submit-button"
 
-# WRONG — breaks on translation changes
+# Text selector — human-readable, self-documenting
 - tapOn: "Submit"
 ```
 
-In React Native components:
+**When to prefer testIDs:**
+- App supports multiple languages or will be translated
+- UI text is dynamic or frequently changes
+- Multiple elements share the same visible text
+
+**When to prefer text selectors:**
+- Single-language app with stable copy
+- Readability and self-documentation are a priority
+- Testing user-visible behavior exactly as it appears
+
+In React Native, add `testID` props when using ID-based selectors:
 
 ```tsx
 <TouchableOpacity testID="submit-button" onPress={handleSubmit}>
@@ -101,6 +118,8 @@ In React Native components:
 ```
 
 ### testID Naming Convention
+
+When using ID-based selectors:
 
 ```
 {component}-{action/type}[-{variant}]
@@ -273,6 +292,94 @@ env:
 ---
 - inputText: ${TEST_EMAIL}
 ```
+
+### 10. Selector State Properties
+
+Use `enabled`, `selected`, `checked`, and `focused` to target elements by their current state. This is useful for validating interactive element states before or after actions.
+
+```yaml
+# Only tap the submit button if it's enabled
+- tapOn:
+    id: "submit-button"
+    enabled: true
+
+# Assert a checkbox is checked
+- assertVisible:
+    id: "terms-checkbox"
+    checked: true
+
+# Wait for an input to be focused
+- extendedWaitUntil:
+    visible:
+      id: "email-input"
+      focused: true
+    timeout: 3000
+```
+
+| Property | Values | Use Case |
+|----------|--------|----------|
+| `enabled` | `true` / `false` | Buttons that disable during submission or until form is valid |
+| `checked` | `true` / `false` | Checkboxes, toggle switches |
+| `selected` | `true` / `false` | Tab items, segmented controls |
+| `focused` | `true` / `false` | Input fields with auto-focus |
+
+### 11. Relative Position Selectors
+
+Distinguish between similar elements by their spatial relationship to other elements. This is more idiomatic and resilient than index-based selection.
+
+```yaml
+# BAD — fragile, breaks if order changes
+- tapOn:
+    text: "Add to Basket"
+    index: 1
+
+# GOOD — contextual, self-documenting
+- tapOn:
+    text: "Add to Basket"
+    below:
+      text: "Awesome Shoes"
+```
+
+Available relative selectors:
+
+```yaml
+# Target element below another
+- tapOn:
+    text: "Buy Now"
+    below: "Product Title"
+
+# Target element that is a child of a parent
+- tapOn:
+    text: "Delete"
+    childOf:
+      id: "item-card-42"
+
+# Target a parent that contains a specific child
+- tapOn:
+    containsChild: "Urgent"
+
+# Target by multiple descendants
+- tapOn:
+    containsDescendants:
+      - id: title_id
+        text: "Specific Title"
+      - "Another descendant text"
+
+# Horizontal positioning
+- tapOn:
+    text: "Edit"
+    rightOf: "Username"
+```
+
+| Selector | Meaning |
+|----------|---------|
+| `below:` | Element is positioned below the referenced element |
+| `above:` | Element is positioned above the referenced element |
+| `leftOf:` | Element is to the left of the referenced element |
+| `rightOf:` | Element is to the right of the referenced element |
+| `childOf:` | Element is a direct child of the referenced parent |
+| `containsChild:` | Element contains a direct child matching the reference |
+| `containsDescendants:` | Element contains all specified descendant elements |
 
 ---
 
@@ -826,7 +933,9 @@ Screenshots saved to `~/.maestro/tests/{timestamp}/`.
 
 ```
 [ ] Unique test email (maestro-{feature}@example.com)
-[ ] All interactive elements have testIDs
+[ ] Selector strategy chosen (testID for i18n apps, text for single-language — see Pattern 1)
+[ ] Selectors use state properties where relevant (enabled, checked — see Pattern 10)
+[ ] Similar elements distinguished with relative selectors, not index (see Pattern 11)
 [ ] Auth pre-flight pattern used (auth-loaded)
 [ ] Post-launch swipe added (iOS crash prevention)
 [ ] Both auth states handled (adaptive flows)
@@ -862,6 +971,7 @@ Screenshots saved to `~/.maestro/tests/{timestamp}/`.
 ## Resources
 
 - [Maestro Documentation](https://docs.maestro.dev/)
+- [Maestro Selectors Reference](https://docs.maestro.dev/api-reference/selectors)
 - [Maestro Cloud](https://cloud.maestro.dev/)
 - [Maestro MCP Server](https://docs.maestro.dev/getting-started/maestro-mcp)
 - [Maestro GitHub](https://github.com/mobile-dev-inc/Maestro)
